@@ -4,6 +4,8 @@ import { supabase } from '@/lib/supabase';
 import { UserSwitcher } from '@/components/UserSwitcher';
 import { QadhaButton } from '@/components/QadhaButton';
 
+export const revalidate = 0; // Disable cache for real-time data
+
 export default async function MahasantriDashboard(props: { searchParams: Promise<{ nim?: string }> }) {
   const searchParams = await props.searchParams;
   const currentNim = searchParams.nim || '2001';
@@ -17,20 +19,24 @@ export default async function MahasantriDashboard(props: { searchParams: Promise
 
   if (!user) return <div className="p-10 text-white">User not found</div>;
 
-  // Fetch hafalan count from latest notes (even if not yet verified)
-  const { data: latestVerifiedLogs } = await supabase
+  // Fetch all hafalan logs for this user to calculate total progress correctly
+  const { data: allHafalanLogs } = await supabase
     .from('hafalan_logs')
     .select('notes')
-    .eq('user_id', user.id)
-    .order('created_at', { ascending: false })
-    .limit(1);
+    .eq('user_id', user.id);
 
   let hafalanCount = 0;
-  const latestVerifiedLog = latestVerifiedLogs?.[0];
-  if (latestVerifiedLog?.notes) {
-    const match = latestVerifiedLog.notes.match(/Nazam \d+-(\d+)/i) || latestVerifiedLog.notes.match(/Nazam (\d+)/i);
-    if (match && match[1]) {
-      hafalanCount = parseInt(match[1]);
+  if (allHafalanLogs) {
+    for (const log of allHafalanLogs) {
+      if (log.notes) {
+        const match = log.notes.match(/Nazam \d+-(\d+)/i) || log.notes.match(/Nazam (\d+)/i);
+        if (match && match[1]) {
+          const count = parseInt(match[1]);
+          if (count > hafalanCount) {
+            hafalanCount = count;
+          }
+        }
+      }
     }
   }
 
